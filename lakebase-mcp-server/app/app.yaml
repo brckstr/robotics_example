@@ -1,0 +1,18 @@
+command:
+  - uvicorn
+  - mcp_server:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - "8000"
+
+env:
+  - name: PGSSLMODE
+    value: require
+
+resources:
+  - name: database
+    database:
+      instance_name: amz-robotics-db
+      database_name: amz_robotics
+      permission: CAN_CONNECT_AND_CREATE

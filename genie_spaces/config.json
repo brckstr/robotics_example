@@ -1,0 +1,39 @@
+{
+  "$schema": "Physical AI Fleet Health Console — Genie Space configuration",
+  "$instructions": [
+    "Genie Space creation requires multiple PATCH calls. table_identifiers is SILENTLY IGNORED — use serialized_space.",
+    "",
+    "Step 1: Create a blank Genie Space via POST:",
+    "  databricks api post /api/2.0/genie/spaces --json '{\"serialized_space\": \"{\\\"version\\\": 2}\", \"warehouse_id\": \"6cd0f5c0ba7fd445\"}' --profile=DEFAULT",
+    "  # Returns: {\"space_id\": \"abc123...\"}",
+    "",
+    "Step 2: PATCH title and description:",
+    "  databricks api patch /api/2.0/genie/spaces/<space_id> --json '{\"title\": \"Fleet Telemetry\", \"description\": \"Query Amazon Robotics fleet — robots, telemetry, anomalies — for the Physical AI Fleet Health Console.\"}' --profile=DEFAULT",
+    "",
+    "Step 3: PATCH tables via serialized_space (the ONLY way that works).",
+    "  Tables MUST be dotted 3-part names SORTED ALPHABETICALLY.",
+    "  databricks api patch /api/2.0/genie/spaces/<space_id> --json '{\"serialized_space\": \"{\\\"version\\\":2,\\\"data_sources\\\":{\\\"tables\\\":[{\\\"identifier\\\":\\\"amz_robotics_9868sm_catalog.fleet_health.anomalies\\\"},{\\\"identifier\\\":\\\"amz_robotics_9868sm_catalog.fleet_health.robots\\\"},{\\\"identifier\\\":\\\"amz_robotics_9868sm_catalog.fleet_health.telemetry\\\"}]}}\"}' --profile=DEFAULT",
+    "",
+    "Step 4: PATCH instructions (see instructions field below).",
+    "",
+    "Step 5: Verify with include_serialized_space=true.",
+    "",
+    "Step 6: Grant CAN_RUN to users group via /api/2.0/permissions/genie/<space_id>."
+  ],
+  "name": "Fleet Telemetry",
+  "description": "Query Amazon Robotics fleet — robots, telemetry, anomalies — for the Physical AI Fleet Health Console.",
+  "warehouse_id": "6cd0f5c0ba7fd445",
+  "tables": [
+    {
+      "$comment": "Tables sorted alphabetically — serialized_space requires this.",
+      "identifier": "amz_robotics_9868sm_catalog.fleet_health.anomalies"
+    },
+    {
+      "identifier": "amz_robotics_9868sm_catalog.fleet_health.robots"
+    },
+    {
+      "identifier": "amz_robotics_9868sm_catalog.fleet_health.telemetry"
+    }
+  ],
+  "instructions": "You are the Fleet Telemetry data agent for the Amazon Robotics RME copilot. Answer questions about robot inventory, telemetry signals, and detected anomalies across the Physical AI fleet using these tables.\n\nKey domain vocabulary:\n- Robot families: Sparrow (item-pick arm), Hercules (drive unit, Kiva descendant), Proteus (AMR), Sequoia (storage gantry).\n- FC sites: BFI4, PDX9, SHV1, CMH1, PHL7, ABE8 (sortable / non-sortable / next-gen).\n- Signals: vibration, joint_torque, joint_temperature, vacuum_pressure, camera_health (Sparrow); battery_soh, motor_current, wheel_encoder, nav_odometry (Hercules); lidar_health, drive_motor, safety_sensor, dock_alignment (Proteus); rail_position, lift_motor, tote_actuator, gantry_temperature (Sequoia).\n- Status values for anomalies: open, investigating, resolved, false_positive.\n- detect_model_version: tag on each anomaly — values like sparrow-detect-v4, sparrow-detect-v5 demonstrate fleet memory carrying across model upgrades.\n- auto_resolved: boolean — true when the agent resolved without human escalation.\n- downtime_minutes: per-anomaly downtime impact (used in $-avoided calculation at $150/min).\n\nWhen asked about a specific robot, JOIN robots ⨝ anomalies ⨝ telemetry on robot_id. Always prefer recent windows (last 7 or 30 days) unless asked otherwise. When asked about a 'family', filter on family in the robots and anomalies tables (not a substring of robot_id). Always cite which detect_model_version produced an anomaly when the question is about upgrades or trends across versions."
+}

@@ -1,0 +1,40 @@
+command:
+  - uvicorn
+  - backend.main:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - 8000
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    value: "6cd0f5c0ba7fd445"
+  - name: CATALOG
+    value: "amz_robotics_9868sm_catalog"
+  - name: SCHEMA
+    value: "fleet_health"
+  - name: MAS_TILE_ID
+    value: "326dad44"
+  - name: GENIE_SPACE_ID
+    value: "01f15ab4bb591f2c8817b56d3e06ccaa"
+  - name: KA_TILE_ID
+    value: ""
+  - name: DEMO_NAME
+    value: "Physical AI Fleet Health Console"
+  - name: DEMO_CUSTOMER
+    value: "Amazon Robotics"
+
+resources:
+  - name: sql-warehouse
+    sql_warehouse:
+      id: "6cd0f5c0ba7fd445"
+      permission: CAN_USE
+  - name: mas-endpoint
+    serving_endpoint:
+      name: "mas-326dad44-endpoint"
+      permission: CAN_QUERY
+  - name: database
+    database:
+      instance_name: "amz-robotics-db"
+      database_name: "amz_robotics"
+      permission: CAN_CONNECT_AND_CREATE

@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Physical AI Fleet Health Console — Amazon Robotics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Amazon brand palette */
+      --primary:    #232F3E;   /* Squid Ink */
+      --primary-2:  #131A22;   /* darker */
+      --accent:     #FF9900;   /* Amazon Orange */
+      --accent-dim: #B26A00;
+      --bg:         #0E1116;
+      --bg-2:       #161B22;
+      --panel:      #1B2230;
+      --panel-2:    #232F3E;
+      --border:     #2A3242;
+      --text:       #E6E8EC;
+      --text-mut:   #9BA3B0;
+      --text-faint: #6B7280;
+      --green:      #10B981;
+      --red:        #EF4444;
+      --blue:       #3B82F6;
+      --yellow:     #F59E0B;
+      --purple:     #8B5CF6;
+      --shadow:     0 4px 14px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    button { font-family: inherit; }
+
+    /* ─── Layout ─── */
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 240px;
+      background: var(--primary);
+      border-right: 1px solid var(--border);
+      padding: 22px 0;
+      flex-shrink: 0;
+      display: flex; flex-direction: column;
+    }
+    .sidebar .brand {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      margin-bottom: 16px;
+    }
+    .sidebar .brand-title {
+      font-weight: 700; font-size: 15px; color: #fff;
+      letter-spacing: -0.01em;
+    }
+    .sidebar .brand-sub {
+      color: var(--accent); font-size: 11px; font-weight: 600;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      margin-top: 3px;
+    }
+    .sidebar nav a {
+      display: flex; align-items: center; gap: 11px;
+      padding: 10px 20px; color: #CBD5E1; font-size: 13.5px;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .sidebar nav a:hover { background: rgba(255,255,255,.04); color: #fff; }
+    .sidebar nav a.active {
+      background: rgba(255,153,0,.08);
+      border-left-color: var(--accent);
+      color: #fff;
+    }
+    .sidebar nav a .ico { font-size: 16px; width: 18px; text-align: center; }
+    .sidebar .footer { margin-top: auto; padding: 16px 20px; font-size: 11px; color: var(--text-faint); }
+    .health-pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; }
+    .health-pill .dot { width:8px; height:8px; border-radius:50%; background: var(--green); }
+    .health-pill.degraded .dot { background: var(--yellow); }
+    .health-pill.error .dot { background: var(--red); }
+
+    .main { flex: 1; min-width: 0; }
+    .topbar {
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+    .topbar .topbar-right { display:flex; gap:18px; align-items:center; color: var(--text-mut); font-size: 12px; }
+
+    .page { display: none; padding: 28px; max-width: 1500px; }
+    .page.active { display: block; }
+    .page h2 { margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+    .page .sub { color: var(--text-mut); margin-bottom: 22px; font-size: 13px; }
+
+    /* ─── KPI Cards ─── */
+    .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 24px; }
+    .kpi {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      position: relative; overflow: hidden;
+    }
+    .kpi:before {
+      content: ''; position: absolute; top:0; left:0; right:0; height: 3px;
+      background: var(--accent);
+    }
+    .kpi .lbl { font-size: 11px; color: var(--text-mut); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+    .kpi .val { font-size: 26px; font-weight: 700; margin: 6px 0 2px; color: #fff; }
+    .kpi .delta { font-size: 11px; color: var(--text-faint); }
+    .kpi.green:before { background: var(--green); }
+    .kpi.red:before { background: var(--red); }
+    .kpi.blue:before { background: var(--blue); }
+    .kpi.yellow:before { background: var(--yellow); }
+    .kpi.purple:before { background: var(--purple); }
+
+    /* ─── Cards / Grids ─── */
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .card h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; color: var(--text); }
+    .card h3 .right { float: right; font-size: 12px; color: var(--text-mut); font-weight: 400; }
+    .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+    /* ─── Fleet Map (FC tiles) ─── */
+    .site-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .site-tile {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--bg-2);
+      cursor: pointer;
+      transition: transform .12s ease, border-color .12s;
+    }
+    .site-tile:hover { transform: translateY(-1px); border-color: var(--accent); }
+    .site-tile .site-id { font-weight: 700; font-size: 14px; color: #fff; }
+    .site-tile .site-meta { font-size: 11px; color: var(--text-mut); margin: 2px 0 8px; }
+    .site-tile .sev-row { display: flex; gap: 6px; font-size: 11px; }
+    .site-tile .pill { padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+    .pill-critical { background: rgba(239,68,68,.18); color: #FCA5A5; }
+    .pill-high { background: rgba(245,158,11,.18); color: #FCD34D; }
+    .pill-medium { background: rgba(59,130,246,.16); color: #93C5FD; }
+    .pill-low { background: rgba(148,163,184,.16); color: #CBD5E1; }
+    .site-tile.healthy { border-color: rgba(16,185,129,.4); }
+    .site-tile.warning { border-color: rgba(245,158,11,.6); }
+    .site-tile.critical { border-color: rgba(239,68,68,.6); }
+    .site-tile .health-tag { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-bottom: 6px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .health-tag.healthy { background: rgba(16,185,129,.2); color: #6EE7B7; }
+    .health-tag.warning { background: rgba(245,158,11,.2); color: #FCD34D; }
+    .health-tag.critical { background: rgba(239,68,68,.2); color: #FCA5A5; }
+
+    /* ─── Tables ─── */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-mut); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 10px 12px; border-bottom: 1px solid rgba(42,50,66,.5); }
+    tr:hover td { background: rgba(255,255,255,.025); }
+    .row-click { cursor: pointer; }
+
+    /* ─── Buttons ─── */
+    .btn { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text); cursor: pointer; font-size: 13px; transition: all .12s; }
+    .btn:hover { border-color: var(--accent); }
+    .btn-primary { background: var(--accent); color: #1a1410; border-color: var(--accent); font-weight: 600; }
+    .btn-primary:hover { background: #FFAA33; border-color: #FFAA33; }
+    .btn-ghost { background: transparent; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ─── Filter bar ─── */
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input {
+      background: var(--bg-2); color: var(--text); border: 1px solid var(--border);
+      padding: 7px 10px; border-radius: 6px; font-size: 13px; font-family: inherit;
+    }
+
+    /* ─── Badges / Pills ─── */
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; display: inline-block; }
+    .badge-operational { background: rgba(16,185,129,.18); color: #6EE7B7; }
+    .badge-degraded { background: rgba(245,158,11,.18); color: #FCD34D; }
+    .badge-maintenance { background: rgba(59,130,246,.18); color: #93C5FD; }
+    .badge-offline { background: rgba(148,163,184,.2); color: #CBD5E1; }
+    .badge-open { background: rgba(239,68,68,.15); color: #FCA5A5; }
+    .badge-investigating { background: rgba(245,158,11,.18); color: #FCD34D; }
+    .badge-resolved { background: rgba(16,185,129,.15); color: #6EE7B7; }
+    .badge-in_progress { background: rgba(59,130,246,.18); color: #93C5FD; }
+    .badge-pending_approval { background: rgba(245,158,11,.2); color: #FCD34D; }
+    .badge-approved { background: rgba(16,185,129,.15); color: #6EE7B7; }
+    .badge-dismissed { background: rgba(148,163,184,.2); color: #CBD5E1; }
+    .badge-critical { background: rgba(239,68,68,.18); color: #FCA5A5; }
+    .badge-high { background: rgba(245,158,11,.18); color: #FCD34D; }
+    .badge-medium { background: rgba(59,130,246,.16); color: #93C5FD; }
+    .badge-low { background: rgba(148,163,184,.16); color: #CBD5E1; }
+
+    /* ─── Persona Switcher (★ WOW MOMENT) ─── */
+    .persona-card {
+      background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(255,153,0,.08);
+    }
+    .persona-card .pc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .persona-card .pc-title { font-size: 17px; font-weight: 700; color: #fff; }
+    .persona-card .pc-meta { font-size: 12px; color: var(--text-mut); }
+    .persona-tabs {
+      display: inline-flex;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .persona-tab {
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-mut);
+      transition: all .15s;
+      border: none;
+      background: transparent;
+    }
+    .persona-tab.active {
+      background: var(--accent);
+      color: #1a1410;
+    }
+    .persona-body { margin-top: 18px; }
+    .persona-section {
+      background: var(--bg-2);
+      border-left: 3px solid var(--accent);
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .persona-section .ps-lbl { font-size: 11px; color: var(--accent); text-transform: uppercase; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .persona-step { display: flex; gap: 12px; padding: 8px 0; }
+    .persona-step .n { background: var(--accent); color: #1a1410; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    .persona-step .t { font-size: 13px; line-height: 1.55; }
+
+    /* ─── Chat ─── */
+    .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 130px); }
+    .chat-msgs { flex: 1; overflow-y: auto; padding: 4px 4px 18px; }
+    .chat-msg { padding: 12px 16px; border-radius: 10px; margin: 8px 0; max-width: 80%; line-height: 1.55; }
+    .chat-msg.user { background: var(--primary-2); border: 1px solid var(--border); margin-left: auto; }
+    .chat-msg.assistant { background: var(--panel); border: 1px solid var(--border); }
+    .chat-input-row { display: flex; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); }
+    .chat-input-row input { flex: 1; padding: 11px 14px; background: var(--bg-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; font-size: 14px; font-family: inherit; }
+    .chat-input-row input:focus { outline: none; border-color: var(--accent); }
+    .chat-steps { font-size: 12px; color: var(--text-mut); margin-bottom: 6px; }
+    .chat-step { display: flex; gap: 6px; align-items: center; padding: 3px 0; }
+    .chat-step .step-icon { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+    .chat-step.active .step-icon { background: var(--accent); animation: pulse 1s infinite; }
+    .chat-step.done .step-icon { background: var(--green); }
+    .chat-step.data .step-icon { background: var(--blue); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .thinking-block { background: var(--bg-2); border-left: 3px solid var(--purple); padding: 10px 14px; border-radius: 4px; margin: 8px 0; font-size: 12.5px; color: var(--text-mut); cursor: pointer; }
+    .thinking-block .thinking-toggle { font-weight: 600; }
+    .thinking-block .thinking-body { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .thinking-block.expanded .thinking-body { display: block; }
+    .chat-action-card { background: var(--bg-2); border: 1px solid var(--accent); border-radius: 8px; padding: 14px; margin: 12px 0; }
+    .ac-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 600; }
+    .ac-details { font-size: 13px; color: var(--text-mut); margin: 6px 0 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ac-buttons { display: flex; gap: 8px; }
+    .ac-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; font-size: 13px; }
+    .ac-btn.approve { background: var(--accent); color: #1a1410; border-color: var(--accent); font-weight: 600; }
+    .ac-btn.dismiss:hover { background: rgba(148,163,184,.1); }
+    .chat-suggested { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+    .chat-suggested button { background: var(--bg-2); border: 1px solid var(--border); color: var(--text-mut); padding: 6px 12px; border-radius: 14px; font-size: 12px; cursor: pointer; }
+    .chat-suggested button:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ─── Workflow cards ─── */
+    .wf-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 10px; cursor: pointer; }
+    .wf-card:hover { border-color: var(--accent); }
+    .wf-card .wf-head { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .wf-card .wf-title { font-weight: 600; font-size: 14px; }
+    .wf-card .wf-summary { color: var(--text-mut); font-size: 13px; }
+    .wf-card .wf-meta { display: flex; gap: 8px; margin-top: 8px; font-size: 11px; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index: 9999; }
+    .modal-bg.open { display:flex; }
+    .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 800px; width: 90%; max-height: 85vh; overflow-y: auto; }
+
+    /* Loading skeleton */
+    .skel { background: linear-gradient(90deg, var(--panel) 25%, var(--bg-2) 50%, var(--panel) 75%); background-size: 200% 100%; animation: skel-shimmer 1.4s infinite; border-radius: 4px; min-height: 14px; }
+    @keyframes skel-shimmer { 0% {background-position: 200% 0;} 100% {background-position: -200% 0;} }
+
+    /* Flash messages */
+    #flash { position: fixed; top: 16px; right: 16px; z-index: 99998; }
+    .flash-msg { background: var(--panel); border: 1px solid var(--green); border-left-width: 4px; color: var(--text); padding: 10px 16px; margin-bottom: 8px; border-radius: 6px; box-shadow: var(--shadow); animation: slideIn .25s; max-width: 360px; }
+    .flash-msg.error { border-color: var(--red); border-left-color: var(--red); }
+    @keyframes slideIn { from {transform: translateX(20px); opacity: 0;} to {transform: none; opacity: 1;} }
+  </style>
+</head>
+<body>
+<div id="flash"></div>
+
+<div class="layout">
+
+  <!-- ─── Sidebar ─── -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-title">Fleet Health Console</div>
+      <div class="brand-sub">Amazon Robotics · Physical AI</div>
+    </div>
+    <nav id="sidebar-nav">
+      <a href="#" data-page="dashboard" class="active"><span class="ico">⊞</span> Dashboard</a>
+      <a href="#" data-page="fleet"><span class="ico">⚙</span> Fleet</a>
+      <a href="#" data-page="incidents"><span class="ico">⚠</span> Incidents</a>
+      <a href="#" data-page="work-orders"><span class="ico">▤</span> Work Orders</a>
+      <a href="#" data-page="memory"><span class="ico">◴</span> Memory</a>
+      <a href="#" data-page="manuals"><span class="ico">⎙</span> Service Manuals</a>
+      <a href="#" data-page="chat"><span class="ico">✦</span> AI Chat</a>
+      <a href="#" data-page="workflows"><span class="ico">◉</span> Agent Workflows</a>
+      <a href="#" data-page="arch"><span class="ico">⌬</span> Architecture</a>
+    </nav>
+    <div class="footer">
+      <div class="health-pill" id="health-pill"><span class="dot"></span><span id="health-text">checking…</span></div>
+      <div style="margin-top: 6px; color: var(--text-faint);">Built on Databricks</div>
+    </div>
+  </aside>
+
+  <!-- ─── Main ─── -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="page-title">Dashboard</h1>
+      <div class="topbar-right">
+        <span id="topbar-meta">Physical AI Fleet Health</span>
+      </div>
+    </div>
+
+    <!-- ─── DASHBOARD ─── -->
+    <section id="page-dashboard" class="page active">
+      <h2>Fleet Health Overview</h2>
+      <p class="sub">Live KPIs across the Amazon Robotics fleet — Sparrow, Hercules, Proteus, Sequoia.</p>
+
+      <div class="kpi-row" id="kpi-row">
+        <div class="kpi"><div class="lbl">Fleet Availability</div><div class="val" id="kpi-avail">—</div><div class="delta" id="kpi-avail-sub"></div></div>
+        <div class="kpi blue"><div class="lbl">MTBF (avg)</div><div class="val" id="kpi-mtbf">—</div><div class="delta">operating hours</div></div>
+        <div class="kpi blue"><div class="lbl">MTTR</div><div class="val" id="kpi-mttr">—</div><div class="delta">minutes / incident</div></div>
+        <div class="kpi red"><div class="lbl">Open Anomalies</div><div class="val" id="kpi-anoms">—</div><div class="delta" id="kpi-anoms-sub"></div></div>
+        <div class="kpi green"><div class="lbl">Auto-Resolution</div><div class="val" id="kpi-auto">—</div><div class="delta">last 30 days</div></div>
+        <div class="kpi yellow"><div class="lbl">Downtime Avoided</div><div class="val" id="kpi-down">—</div><div class="delta">last 30 days</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Fleet Health by FC <span class="right" id="dash-fleet-sub"></span></h3>
+          <div class="site-grid" id="site-grid"></div>
+        </div>
+        <div class="card">
+          <h3>Open Incidents <span class="right"><a href="#" onclick="navigate('incidents');return false">View all →</a></span></h3>
+          <div id="dash-incidents"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Recent Agent Activity</h3>
+        <div id="dash-activity"></div>
+      </div>
+    </section>
+
+    <!-- ─── FLEET ─── -->
+    <section id="page-fleet" class="page">
+      <h2>Fleet</h2>
+      <p class="sub">Sparrow, Hercules, Proteus, Sequoia across 6 FCs. Click any robot for telemetry, anomalies, and work order history.</p>
+
+      <div class="filter-bar">
+        <select id="flt-family" onchange="loadFleet()"><option value="">All families</option><option>Sparrow</option><option>Hercules</option><option>Proteus</option><option>Sequoia</option></select>
+        <select id="flt-site" onchange="loadFleet()"><option value="">All FCs</option><option>BFI4</option><option>PDX9</option><option>SHV1</option><option>CMH1</option><option>PHL7</option><option>ABE8</option></select>
+        <select id="flt-status" onchange="loadFleet()"><option value="">Any status</option><option>operational</option><option>degraded</option><option>maintenance</option><option>offline</option></select>
+        <input id="flt-search" placeholder="Search robot ID…" oninput="loadFleetDebounced()">
+      </div>
+
+      <div class="card">
+        <h3>Robots <span class="right" id="fleet-count"></span></h3>
+        <div id="fleet-list" style="overflow-x:auto"></div>
+      </div>
+    </section>
+
+    <!-- ─── INCIDENTS (★ WOW MOMENT) ─── -->
+    <section id="page-incidents" class="page">
+      <h2>Incidents</h2>
+      <p class="sub">Persona-aware diagnostics. <strong>Click any incident</strong>, then toggle between RME Tech and RME Lead views — same agent reasoning, different render depth.</p>
+
+      <div class="filter-bar">
+        <select id="inc-severity" onchange="loadIncidents()"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
+        <select id="inc-family" onchange="loadIncidents()"><option value="">All families</option><option>Sparrow</option><option>Hercules</option><option>Proteus</option><option>Sequoia</option></select>
+        <select id="inc-site" onchange="loadIncidents()"><option value="">All FCs</option><option>BFI4</option><option>PDX9</option><option>SHV1</option><option>CMH1</option><option>PHL7</option><option>ABE8</option></select>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Open Incidents <span class="right" id="incidents-count"></span></h3>
+          <div id="incidents-list" style="overflow-x:auto"></div>
+        </div>
+        <div class="card" id="incident-detail-card">
+          <h3>Incident detail</h3>
+          <div id="incident-detail" style="color: var(--text-mut)">Select an incident from the list to see the persona-aware view.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── WORK ORDERS ─── -->
+    <section id="page-work-orders" class="page">
+      <h2>Work Orders</h2>
+      <p class="sub">Operational work orders — created by the AI agent via Lakebase MCP, managed by RME teams.</p>
+
+      <div class="filter-bar">
+        <select id="wo-status" onchange="loadWorkOrders()"><option value="">All statuses</option><option>open</option><option>in_progress</option><option>awaiting_parts</option><option>completed</option><option>cancelled</option></select>
+        <select id="wo-severity" onchange="loadWorkOrders()"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
+      </div>
+
+      <div class="card">
+        <h3>Work Orders <span class="right" id="wo-count"></span></h3>
+        <div id="wo-list" style="overflow-x:auto"></div>
+      </div>
+    </section>
+
+    <!-- ─── MEMORY ─── -->
+    <section id="page-memory" class="page">
+      <h2>Fleet Memory</h2>
+      <p class="sub">Persistent diagnostics stored in Lakebase. The institutional memory of the fleet — survives detection-model upgrades (Sparrow v4 → v5 and beyond).</p>
+
+      <div class="card">
+        <h3>Memory grouped by detection model</h3>
+        <div id="memory-versions" style="overflow-x:auto"></div>
+      </div>
+
+      <div class="filter-bar">
+        <select id="mem-family" onchange="loadMemory()"><option value="">All families</option><option>Sparrow</option><option>Hercules</option><option>Proteus</option><option>Sequoia</option></select>
+        <select id="mem-version" onchange="loadMemory()"><option value="">All model versions</option><option>sparrow-detect-v4</option><option>sparrow-detect-v5</option><option>hercules-detect-v3</option><option>proteus-detect-v2</option><option>sequoia-detect-v2</option></select>
+      </div>
+
+      <div class="card">
+        <h3>Memory entries <span class="right" id="mem-count"></span></h3>
+        <div id="memory-list"></div>
+      </div>
+    </section>
+
+    <!-- ─── SERVICE MANUALS ─── -->
+    <section id="page-manuals" class="page">
+      <h2>Service Manuals</h2>
+      <p class="sub">RAG corpus surfaced via the Knowledge Assistant. Every chunk shows its UC lineage column — every retrieval is governed.</p>
+
+      <div class="filter-bar">
+        <select id="man-family" onchange="loadManuals()"><option value="">All families</option><option>Sparrow</option><option>Hercules</option><option>Proteus</option><option>Sequoia</option></select>
+        <input id="man-search" placeholder="Search text (e.g. 'vacuum', 'lidar')…" oninput="loadManualsDebounced()">
+      </div>
+
+      <div class="card">
+        <h3>Manual chunks <span class="right" id="man-count"></span></h3>
+        <div id="manuals-list"></div>
+      </div>
+    </section>
+
+    <!-- ─── AI CHAT ─── -->
+    <section id="page-chat" class="page">
+      <h2>AI Chat — Fleet Health Copilot</h2>
+      <p class="sub">Cognitive-load reduction for RME teams. Echo of Project Eluna, extended with UC lineage + persistent Lakebase memory + governed RAG.</p>
+
+      <div class="chat-wrap">
+        <div class="chat-msgs" id="chat-messages"></div>
+        <div class="chat-suggested" id="chat-suggested"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" placeholder="Ask about a robot, anomaly, or remediation…" onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn btn-primary" onclick="sendChat()">Send</button>
+          <button class="btn btn-ghost" onclick="clearChat()">Clear</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-mut)"><input type="checkbox" id="auto-approve-mcp" checked> Auto-approve writes</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── WORKFLOWS ─── -->
+    <section id="page-workflows" class="page">
+      <h2>Agent Workflows</h2>
+      <p class="sub">Multi-step reasoning that pauses for human approval. Approving fires the domain side-effects (creates work order, persists memory, escalates exception).</p>
+
+      <div class="kpi-row" style="grid-template-columns: repeat(5, 1fr);">
+        <div class="kpi yellow"><div class="lbl">Pending</div><div class="val" id="wf-kpi-pending">—</div></div>
+        <div class="kpi blue"><div class="lbl">In Progress</div><div class="val" id="wf-kpi-inprog">—</div></div>
+        <div class="kpi green"><div class="lbl">Completed (7d)</div><div class="val" id="wf-kpi-done">—</div></div>
+        <div class="kpi"><div class="lbl">Agent Actions (24h)</div><div class="val" id="wf-kpi-acts">—</div></div>
+        <div class="kpi red"><div class="lbl">Open Exceptions</div><div class="val" id="wf-kpi-exc">—</div></div>
+      </div>
+
+      <div class="card">
+        <h3>Workflows</h3>
+        <div id="wf-list"></div>
+      </div>
+    </section>
+
+    <!-- ─── ARCHITECTURE ─── -->
+    <section id="page-arch" class="page">
+      <h2>Architecture</h2>
+      <p class="sub">Live data sources, AI agents, supervisor, application — auto-discovered from runtime metadata.</p>
+      <div class="card">
+        <h3>Live nodes</h3>
+        <div id="arch-nodes" style="overflow-x:auto"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ─── Modal for workflow detail ─── -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target.id==='modal-bg')closeModal()">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<script>
+// ─── API Helpers ──────────────────────────────────────────────────────────
+async function fetchApi(path)         { const r = await fetch(path); if (!r.ok) throw new Error('API '+r.status); return r.json(); }
+async function postApi(path, body)    { const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); if (!r.ok) throw new Error('API '+r.status); return r.json(); }
+async function patchApi(path, body)   { const r = await fetch(path, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)}); if (!r.ok) throw new Error('API '+r.status); return r.json(); }
+
+// ─── Formatting ──────────────────────────────────────────────────────────
+function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtN(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+function fmtPct(n) { return n == null ? '—' : Number(n).toFixed(1) + '%'; }
+function fmtUsd(n) { return n == null ? '—' : '$' + Number(n).toLocaleString(undefined, {maximumFractionDigits:0}); }
+function timeAgo(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso), now = new Date(), diff = (now-d)/1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60)+'m ago';
+  if (diff < 86400) return Math.floor(diff/3600)+'h ago';
+  return Math.floor(diff/86400)+'d ago';
+}
+function badge(s) { return `<span class="badge badge-${esc(s)}">${esc(s)}</span>`; }
+function formatMd(s) {
+  return esc(s).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+function showFlash(msg, isError) {
+  const div = document.createElement('div');
+  div.className = 'flash-msg' + (isError ? ' error' : '');
+  div.textContent = msg;
+  document.getElementById('flash').appendChild(div);
+  setTimeout(() => div.remove(), 3500);
+}
+
+// ─── Session-expired handling (Gotcha #29) ───────────────────────────────
+let _sessionExpiredShown = false;
+function handleSessionExpired() {
+  if (_sessionExpiredShown) return;
+  _sessionExpiredShown = true;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,5,8,.92);display:flex;align-items:center;justify-content:center;z-index:99999';
+  overlay.innerHTML = `<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:420px;text-align:center">
+    <h3 style="margin:0 0 8px;color:#fff">Session expired</h3>
+    <p style="color:var(--text-mut);margin:0 0 18px">Refreshing to renew your Databricks token…</p>
+    <button class="btn btn-primary" onclick="window.location.href='/api/force-logout'">Log in again</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => window.location.reload(), 1500);
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────────
+const PAGES = ['dashboard','fleet','incidents','work-orders','memory','manuals','chat','workflows','arch'];
+const PAGE_TITLES = {
+  'dashboard':   'Dashboard',
+  'fleet':       'Fleet',
+  'incidents':   'Incidents',
+  'work-orders': 'Work Orders',
+  'memory':      'Fleet Memory',
+  'manuals':     'Service Manuals',
+  'chat':        'AI Chat',
+  'workflows':   'Agent Workflows',
+  'arch':        'Architecture',
+};
+
+function navigate(page) {
+  if (!PAGES.includes(page)) page = 'dashboard';
+  PAGES.forEach(p => {
+    const el = document.getElementById('page-'+p);
+    if (el) el.classList.toggle('active', p === page);
+  });
+  document.querySelectorAll('#sidebar-nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.page === page);
+  });
+  document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'fleet') loadFleet();
+  else if (page === 'incidents') loadIncidents();
+  else if (page === 'work-orders') loadWorkOrders();
+  else if (page === 'memory') { loadMemoryVersions(); loadMemory(); }
+  else if (page === 'manuals') loadManuals();
+  else if (page === 'chat') loadChat();
+  else if (page === 'workflows') loadWorkflowsPage();
+  else if (page === 'arch') loadArchitecture();
+}
+document.querySelectorAll('#sidebar-nav a').forEach(a => {
+  a.addEventListener('click', (e) => { e.preventDefault(); navigate(a.dataset.page); });
+});
+
+let _debounceTimer = null;
+function _debounce(fn, ms=300) { return () => { clearTimeout(_debounceTimer); _debounceTimer = setTimeout(fn, ms); }; }
+const loadFleetDebounced = _debounce(() => loadFleet(), 300);
+const loadManualsDebounced = _debounce(() => loadManuals(), 300);
+
+// ─── Skeleton helper ─────────────────────────────────────────────────────
+function showSkeleton(id, rows) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = Array.from({length: rows||4}, () => '<div class="skel" style="height:16px;margin-bottom:8px"></div>').join('');
+}
+
+// ─── Health pill ─────────────────────────────────────────────────────────
+async function refreshHealth() {
+  try {
+    const h = await fetchApi('/api/health');
+    const pill = document.getElementById('health-pill');
+    const text = document.getElementById('health-text');
+    pill.classList.remove('degraded','error');
+    if (h.status === 'healthy') { text.textContent = 'All systems healthy'; }
+    else if (h.status === 'degraded') { pill.classList.add('degraded'); text.textContent = 'Degraded'; }
+    else { pill.classList.add('error'); text.textContent = 'Error'; }
+  } catch (e) {
+    document.getElementById('health-text').textContent = 'unreachable';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+  showSkeleton('site-grid', 6);
+  showSkeleton('dash-incidents', 5);
+  showSkeleton('dash-activity', 5);
+  const [metrics, sites, incidents, activity] = await Promise.all([
+    fetchApi('/api/fleet/metrics').catch(() => ({})),
+    fetchApi('/api/fleet/site-health').catch(() => []),
+    fetchApi('/api/incidents?limit=8').catch(() => []),
+    fetchApi('/api/fleet/recent-activity').catch(() => []),
+  ]);
+
+  // KPIs
+  document.getElementById('kpi-avail').textContent = fmtPct(metrics.availability_pct);
+  document.getElementById('kpi-avail-sub').textContent = `${fmtN(metrics.operational_robots)} / ${fmtN(metrics.total_robots)} operational`;
+  document.getElementById('kpi-mtbf').textContent = fmtN(metrics.mtbf_hours);
+  document.getElementById('kpi-mttr').textContent = fmtN(metrics.mttr_minutes);
+  document.getElementById('kpi-anoms').textContent = fmtN(metrics.open_anomalies);
+  document.getElementById('kpi-anoms-sub').textContent = `${fmtN(metrics.open_critical)} critical`;
+  document.getElementById('kpi-auto').textContent = fmtPct(metrics.autonomous_resolution_pct);
+  document.getElementById('kpi-down').textContent = fmtUsd(metrics.downtime_avoided_dollars);
+
+  // Sites
+  const sg = document.getElementById('site-grid');
+  document.getElementById('dash-fleet-sub').textContent = `${sites.length} sites`;
+  sg.innerHTML = sites.map(s => `
+    <div class="site-tile ${s.health}" onclick="navigate('incidents'); document.getElementById('inc-site').value='${esc(s.fc_site)}'; loadIncidents()">
+      <span class="health-tag ${s.health}">${esc(s.health)}</span>
+      <div class="site-id">${esc(s.fc_site)} <span style="font-size:11px;color:var(--text-mut);font-weight:400">${esc(s.fc_type||'').replace(/_/g,' ')}</span></div>
+      <div class="site-meta">${esc(s.region||'')} · ${fmtN(s.operational)}/${fmtN(s.robot_count)} ops</div>
+      <div class="sev-row">
+        ${s.critical_open ? `<span class="pill pill-critical">${s.critical_open} crit</span>` : ''}
+        ${s.high_open ? `<span class="pill pill-high">${s.high_open} high</span>` : ''}
+        ${s.medium_open ? `<span class="pill pill-medium">${s.medium_open} med</span>` : ''}
+        ${!s.critical_open && !s.high_open && !s.medium_open ? `<span class="pill pill-low">all clear</span>` : ''}
+      </div>
+    </div>`).join('');
+
+  // Incidents
+  const di = document.getElementById('dash-incidents');
+  if (!incidents.length) { di.innerHTML = '<div style="color:var(--text-mut);font-size:13px">No open incidents.</div>'; }
+  else {
+    di.innerHTML = '<table><thead><tr><th>Sev</th><th>Robot</th><th>Signal</th><th>FC</th></tr></thead><tbody>' +
+      incidents.map(i => `<tr class="row-click" onclick="openIncidentDetail('${esc(i.anomaly_id)}')">
+        <td>${badge(i.severity)}</td>
+        <td><strong>${esc(i.robot_id)}</strong><br><span style="color:var(--text-mut);font-size:11px">${esc(i.family)}</span></td>
+        <td>${esc(i.signal.replace(/_/g,' '))}</td>
+        <td>${esc(i.fc_site)}</td>
+      </tr>`).join('') + '</tbody></table>';
+  }
+
+  // Activity
+  const da = document.getElementById('dash-activity');
+  if (!activity.length) { da.innerHTML = '<div style="color:var(--text-mut);font-size:13px">No recent activity.</div>'; }
+  else {
+    da.innerHTML = '<table><thead><tr><th>Type</th><th>Entity</th><th>Description</th><th>Status</th><th>When</th></tr></thead><tbody>' +
+      activity.map(a => `<tr>
+        <td>${esc(a.kind)}: <strong>${esc(a.title)}</strong></td>
+        <td>${esc(a.entity_id||'')}</td>
+        <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.description||'')}</td>
+        <td>${a.status ? badge(a.status) : ''}</td>
+        <td>${timeAgo(a.created_at)}</td>
+      </tr>`).join('') + '</tbody></table>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLEET
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadFleet() {
+  const fam = document.getElementById('flt-family').value;
+  const site = document.getElementById('flt-site').value;
+  const status = document.getElementById('flt-status').value;
+  const search = document.getElementById('flt-search').value.trim();
+  const qs = new URLSearchParams();
+  if (fam) qs.set('family', fam);
+  if (site) qs.set('fc_site', site);
+  if (status) qs.set('status', status);
+  if (search) qs.set('search', search);
+  showSkeleton('fleet-list', 10);
+  const rows = await fetchApi('/api/fleet/robots?'+qs.toString()).catch(() => []);
+  document.getElementById('fleet-count').textContent = `${rows.length} robots`;
+  if (!rows.length) { document.getElementById('fleet-list').innerHTML = '<div style="color:var(--text-mut)">No robots match the filters.</div>'; return; }
+  document.getElementById('fleet-list').innerHTML = '<table><thead><tr><th>Robot</th><th>Family</th><th>FC</th><th>Firmware</th><th>Detect model</th><th>Status</th><th>Hours</th></tr></thead><tbody>' +
+    rows.map(r => `<tr class="row-click" onclick="openRobotDetail('${esc(r.robot_id)}')">
+      <td><strong>${esc(r.robot_id)}</strong></td>
+      <td>${esc(r.family)} <span style="color:var(--text-mut);font-size:11px">${esc((r.kind||'').replace(/_/g,' '))}</span></td>
+      <td>${esc(r.fc_site)} <span style="color:var(--text-mut);font-size:11px">${esc((r.fc_type||'').replace(/_/g,' '))}</span></td>
+      <td><code style="font-size:11px;color:var(--accent)">${esc(r.firmware_version)}</code></td>
+      <td><code style="font-size:11px;color:var(--purple)">${esc(r.detect_model)}</code></td>
+      <td>${badge(r.status)}</td>
+      <td>${fmtN(r.hours_operated)}</td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+async function openRobotDetail(id) {
+  const d = await fetchApi('/api/fleet/robots/' + encodeURIComponent(id)).catch(() => null);
+  if (!d) { showFlash('Could not load robot', true); return; }
+  const r = d.robot;
+  const sig_sets = {};
+  (d.telemetry||[]).forEach(t => { (sig_sets[t.signal] = sig_sets[t.signal] || []).push(t); });
+  const sigBlock = Object.entries(sig_sets).map(([sig, points]) => {
+    const last = points[points.length-1];
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><strong>${esc(sig.replace(/_/g,' '))}</strong> <span style="color:var(--text-mut);font-size:12px">latest: ${last.reading_value} (health ${last.health_score})</span></div>`;
+  }).join('');
+  const anomBlock = (d.anomalies||[]).slice(0,10).map(a => `
+    <tr class="row-click" onclick="closeModal();navigate('incidents');openIncidentDetail('${esc(a.anomaly_id)}')">
+      <td>${badge(a.severity)}</td><td>${esc(a.signal.replace(/_/g,' '))}</td><td>${esc(a.detected_at)}</td><td>${badge(a.status)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="color:var(--text-mut)">No anomalies.</td></tr>';
+  const woBlock = (d.work_orders||[]).slice(0,10).map(w => `
+    <tr><td><strong>${esc(w.wo_number)}</strong></td><td>${badge(w.severity)}</td><td>${badge(w.status)}</td><td>${timeAgo(w.created_at)}</td></tr>`).join('') || '<tr><td colspan="4" style="color:var(--text-mut)">No work orders.</td></tr>';
+
+  document.getElementById('modal-body').innerHTML = `
+    <h2 style="margin:0 0 4px">${esc(r.robot_id)}</h2>
+    <p style="color:var(--text-mut);margin:0 0 18px">${esc(r.family)} · ${esc(r.kind.replace(/_/g,' '))} · ${esc(r.fc_site)} · ${esc(r.region)}</p>
+    <div class="grid-3">
+      <div><strong>Firmware</strong><br><code style="color:var(--accent)">${esc(r.firmware_version)}</code></div>
+      <div><strong>Detect model</strong><br><code style="color:var(--purple)">${esc(r.detect_model)}</code></div>
+      <div><strong>Status</strong><br>${badge(r.status)} · ${fmtN(r.hours_operated)} hrs</div>
+    </div>
+    <h3 style="margin:18px 0 8px">Telemetry signals</h3>
+    <div>${sigBlock || '<span style="color:var(--text-mut)">No recent telemetry.</span>'}</div>
+    <h3 style="margin:18px 0 8px">Recent anomalies</h3>
+    <table><thead><tr><th>Severity</th><th>Signal</th><th>Detected</th><th>Status</th></tr></thead><tbody>${anomBlock}</tbody></table>
+    <h3 style="margin:18px 0 8px">Work order history</h3>
+    <table><thead><tr><th>WO</th><th>Severity</th><th>Status</th><th>When</th></tr></thead><tbody>${woBlock}</tbody></table>
+    <div style="margin-top:18px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="askAI('Why is ${esc(r.robot_id)} flagging anomalies? RME Tech view please.')">Ask AI (Tech view)</button>
+      <button class="btn" onclick="askAI('RME Lead view — what is the SLA risk picture for ${esc(r.robot_id)}?')">Ask AI (Lead view)</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>
+  `;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INCIDENTS (★ persona switcher)
+// ═══════════════════════════════════════════════════════════════════════════
+let _currentPersona = 'rme_tech';
+async function loadIncidents() {
+  const sev = document.getElementById('inc-severity').value;
+  const fam = document.getElementById('inc-family').value;
+  const site = document.getElementById('inc-site').value;
+  const qs = new URLSearchParams();
+  if (sev) qs.set('severity', sev);
+  if (fam) qs.set('family', fam);
+  if (site) qs.set('fc_site', site);
+  showSkeleton('incidents-list', 8);
+  const rows = await fetchApi('/api/incidents?'+qs.toString()).catch(() => []);
+  document.getElementById('incidents-count').textContent = `${rows.length} open`;
+  if (!rows.length) { document.getElementById('incidents-list').innerHTML = '<div style="color:var(--text-mut)">No open incidents match the filters.</div>'; return; }
+  document.getElementById('incidents-list').innerHTML = '<table><thead><tr><th>Sev</th><th>Robot</th><th>Signal</th><th>FC</th><th>Detected</th></tr></thead><tbody>' +
+    rows.map(i => `<tr class="row-click" onclick="openIncidentDetail('${esc(i.anomaly_id)}')">
+      <td>${badge(i.severity)}</td>
+      <td><strong>${esc(i.robot_id)}</strong><br><span style="color:var(--text-mut);font-size:11px">${esc(i.family)}</span></td>
+      <td>${esc(i.signal.replace(/_/g,' '))}</td>
+      <td>${esc(i.fc_site)}</td>
+      <td>${timeAgo(i.detected_at)}</td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+async function openIncidentDetail(anomalyId) {
+  const card = document.getElementById('incident-detail');
+  card.innerHTML = '<div class="skel" style="height:200px"></div>';
+  const v = await fetchApi('/api/incidents/' + encodeURIComponent(anomalyId) + '/persona').catch(() => null);
+  if (!v) { card.innerHTML = '<div style="color:var(--red)">Could not load incident.</div>'; return; }
+  const inc = v.incident;
+  card.innerHTML = `
+    <div class="persona-card">
+      <div class="pc-header">
+        <div>
+          <div class="pc-title">${esc(inc.robot_id)} — ${esc(inc.signal.replace(/_/g,' '))}</div>
+          <div class="pc-meta">${esc(inc.family)} · ${esc(inc.fc_site)} · ${badge(inc.severity)} · detected by <code style="color:var(--purple)">${esc(inc.detect_model_version)}</code></div>
+        </div>
+        <div class="persona-tabs">
+          <button class="persona-tab ${_currentPersona==='rme_tech'?'active':''}" onclick="setPersona('rme_tech', this)">RME Tech</button>
+          <button class="persona-tab ${_currentPersona==='rme_lead'?'active':''}" onclick="setPersona('rme_lead', this)">RME Lead</button>
+        </div>
+      </div>
+      <div class="persona-body" id="persona-body" data-tech='${esc(JSON.stringify(v.rme_tech))}' data-lead='${esc(JSON.stringify(v.rme_lead))}'>
+        ${renderPersonaView(v.rme_tech, 'rme_tech')}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-primary" onclick="askAI('Create a work order for ${esc(inc.robot_id)} — ${esc(inc.signal.replace(/_/g,' '))} anomaly. Use the agent_memory of similar past cases.')">Create work order via AI</button>
+      <button class="btn" onclick="askAI('Persist this diagnostic to fleet memory for future Sparrow upgrades.')">Persist to fleet memory</button>
+    </div>`;
+}
+
+function setPersona(p, btn) {
+  _currentPersona = p;
+  document.querySelectorAll('.persona-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const body = document.getElementById('persona-body');
+  if (!body) return;
+  const data = JSON.parse(p === 'rme_tech' ? body.dataset.tech.replace(/&quot;/g, '"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>') : body.dataset.lead.replace(/&quot;/g, '"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>'));
+  body.innerHTML = renderPersonaView(data, p);
+}
+
+function renderPersonaView(view, persona) {
+  if (!view) return '<div style="color:var(--text-mut)">No data.</div>';
+  if (persona === 'rme_tech') {
+    const steps = (view.steps||[]).map(s => `<div class="persona-step"><div class="n">${s.n}</div><div class="t">${esc(s.text)}</div></div>`).join('');
+    const parts = (view.parts||[]).map(p => `<code style="background:var(--bg);padding:2px 8px;border-radius:3px;color:var(--accent);font-size:12px">${esc(p)}</code>`).join(' ');
+    const m = view.manual || {};
+    return `
+      <div class="persona-section"><div class="ps-lbl">Remediation Steps</div>${steps}</div>
+      <div class="persona-section"><div class="ps-lbl">Parts</div>${parts || '<span style="color:var(--text-mut)">See manual</span>'}</div>
+      <div class="persona-section"><div class="ps-lbl">Manual Citation (UC-governed)</div>
+        <div><strong>${esc(m.source_doc||'Service Manual')}</strong> · ${esc(m.section||'')} · p. ${esc(m.page||'')}</div>
+        <div style="color:var(--text-mut);font-size:12px;margin-top:4px">Source: <code>${esc(m.source_uri||'')}</code></div>
+      </div>
+      <div style="display:flex;gap:18px;margin-top:6px;font-size:12px;color:var(--text-mut)">
+        <span>⏱ Est. time: ${esc(view.estimated_time_minutes||'?')} min</span>
+        ${view.torque_spec_nm ? `<span>⚙ Torque spec: ${esc(view.torque_spec_nm)} Nm</span>` : ''}
+      </div>`;
+  } else {
+    const mem = view.prior_memory;
+    return `
+      <div class="persona-section"><div class="ps-lbl">Summary</div>${esc(view.summary||'')}</div>
+      <div class="persona-section"><div class="ps-lbl">SLA Risk</div>
+        <div>Projected downtime: <strong>${esc(view.sla_risk?.projected_minutes_downtime||0)} min</strong> · Critical: <strong style="color:var(--red)">${esc(view.sla_risk?.critical||'')}</strong> · Redeploy recommended: ${view.sla_risk?.redeploy_recommended ? '<strong style="color:var(--accent)">Yes</strong>' : 'No'}</div>
+      </div>
+      ${view.redeploy ? `<div class="persona-section"><div class="ps-lbl">Redeploy Recommendation</div>${esc(view.redeploy.rationale||'')}</div>` : ''}
+      ${mem ? `<div class="persona-section" style="border-left-color:var(--purple)"><div class="ps-lbl" style="color:var(--purple)">Prior Memory (Carry-Forward)</div>
+        <div style="font-size:12px;color:var(--text-mut)">From <code style="color:var(--purple)">${esc(mem.model_version)}</code> — ${esc(view.model_version_note||'')}</div>
+        <div style="margin-top:6px">${esc(mem.diagnostic||'')}</div>
+        <div style="margin-top:4px;color:var(--text-mut);font-size:12px">Remediation: ${esc(mem.remediation||'')} — outcome: ${esc(mem.outcome||'')}</div>
+      </div>` : ''}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORK ORDERS
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadWorkOrders() {
+  const st = document.getElementById('wo-status').value;
+  const sev = document.getElementById('wo-severity').value;
+  const qs = new URLSearchParams();
+  if (st) qs.set('status', st);
+  if (sev) qs.set('severity', sev);
+  showSkeleton('wo-list', 8);
+  const rows = await fetchApi('/api/work-orders?'+qs.toString()).catch(() => []);
+  document.getElementById('wo-count').textContent = `${rows.length} orders`;
+  if (!rows.length) { document.getElementById('wo-list').innerHTML = '<div style="color:var(--text-mut)">No work orders.</div>'; return; }
+  document.getElementById('wo-list').innerHTML = '<table><thead><tr><th>WO #</th><th>Robot</th><th>Severity</th><th>Title</th><th>Tech</th><th>Status</th><th>When</th><th></th></tr></thead><tbody>' +
+    rows.map(w => `<tr>
+      <td><strong>${esc(w.wo_number)}</strong></td>
+      <td>${esc(w.robot_id)}<br><span style="color:var(--text-mut);font-size:11px">${esc(w.family)} · ${esc(w.fc_site)}</span></td>
+      <td>${badge(w.severity)}</td>
+      <td style="max-width:340px">${esc(w.title)}</td>
+      <td>${esc(w.technician||'—')}</td>
+      <td>${badge(w.status)}</td>
+      <td>${timeAgo(w.created_at)}</td>
+      <td>${w.status !== 'completed' ? `<button class="btn btn-sm" onclick="completeWorkOrder(${w.work_order_id})">Complete</button>` : ''}</td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+async function completeWorkOrder(id) {
+  try {
+    await patchApi('/api/work-orders/'+id, {status: 'completed'});
+    showFlash('Work order completed');
+    loadWorkOrders();
+  } catch (e) {
+    showFlash('Failed to complete: '+e.message, true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MEMORY (Eluna differentiator)
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadMemoryVersions() {
+  const rows = await fetchApi('/api/memory/versions').catch(() => []);
+  const el = document.getElementById('memory-versions');
+  if (!rows.length) { el.innerHTML = '<div style="color:var(--text-mut)">No memory yet.</div>'; return; }
+  // Group by model_version
+  const byVer = {};
+  rows.forEach(r => { (byVer[r.model_version] = byVer[r.model_version] || []).push(r); });
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">' +
+    Object.entries(byVer).map(([ver, items]) => {
+      const total = items.reduce((s, x) => s + Number(x.cnt||0), 0);
+      const fams = items.map(x => `<span class="badge badge-medium" style="margin-right:4px">${esc(x.family)}: ${fmtN(x.cnt)}</span>`).join(' ');
+      return `<div style="background:var(--bg-2);border:1px solid var(--purple);border-radius:8px;padding:14px">
+        <div style="font-size:11px;color:var(--purple);text-transform:uppercase;font-weight:700;letter-spacing:.05em">Detection model</div>
+        <div style="font-family:monospace;font-size:13px;color:#fff;margin:2px 0 8px">${esc(ver)}</div>
+        <div style="font-size:11px;color:var(--text-mut);margin-bottom:8px">${fmtN(total)} memories retained · survives upgrades</div>
+        <div>${fams}</div>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+async function loadMemory() {
+  const fam = document.getElementById('mem-family').value;
+  const ver = document.getElementById('mem-version').value;
+  const qs = new URLSearchParams();
+  if (fam) qs.set('family', fam);
+  if (ver) qs.set('model_version', ver);
+  showSkeleton('memory-list', 6);
+  const rows = await fetchApi('/api/memory?'+qs.toString()).catch(() => []);
+  document.getElementById('mem-count').textContent = `${rows.length} entries`;
+  if (!rows.length) { document.getElementById('memory-list').innerHTML = '<div style="color:var(--text-mut)">No memory entries.</div>'; return; }
+  document.getElementById('memory-list').innerHTML = rows.map(m => `
+    <div style="border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:6px;padding:12px 16px;margin-bottom:10px;background:var(--bg-2)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <div><strong>${esc(m.robot_id)}</strong> · <span style="color:var(--text-mut)">${esc(m.family)} / ${esc((m.signal||'').replace(/_/g,' '))}</span></div>
+        <div><code style="color:var(--purple);font-size:12px">${esc(m.model_version)}</code> · ${badge(m.outcome)} · ${esc(m.persona)}</div>
+      </div>
+      <div style="font-size:13px">${esc(m.diagnostic||'')}</div>
+      ${m.remediation ? `<div style="color:var(--text-mut);font-size:12.5px;margin-top:4px"><strong>Remediation:</strong> ${esc(m.remediation)}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-faint);margin-top:6px">Confidence ${esc(m.confidence||'')} · ${timeAgo(m.created_at)}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SERVICE MANUALS
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadManuals() {
+  const fam = document.getElementById('man-family').value;
+  const search = document.getElementById('man-search').value.trim();
+  const qs = new URLSearchParams();
+  if (fam) qs.set('family', fam);
+  if (search) qs.set('search', search);
+  showSkeleton('manuals-list', 6);
+  const rows = await fetchApi('/api/manuals?'+qs.toString()).catch(() => []);
+  document.getElementById('man-count').textContent = `${rows.length} chunks`;
+  if (!rows.length) { document.getElementById('manuals-list').innerHTML = '<div style="color:var(--text-mut)">No matching chunks.</div>'; return; }
+  document.getElementById('manuals-list').innerHTML = rows.map(c => `
+    <div style="border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:10px;background:var(--bg-2)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <div><strong>${esc(c.family)}</strong> · ${esc(c.manual_section)} <span style="color:var(--text-mut)">· p. ${esc(c.page)}</span></div>
+        <div><span class="badge badge-medium">${esc(c.signal_tag.replace(/_/g,' '))}</span></div>
+      </div>
+      <div style="font-size:13px;color:var(--text);margin:4px 0">${esc(c.chunk_text)}</div>
+      <div style="font-size:11px;color:var(--text-faint)">UC lineage: <code>${esc(c.source_uri)}</code></div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI CHAT (full SSE streaming — adapted from scaffold)
+// ═══════════════════════════════════════════════════════════════════════════
+const SUGGESTED = [
+  "Why is SPA-BFI4-007 throwing vacuum_pressure alarms? RME Tech view.",
+  "RME Lead view — Sparrow critical anomalies last 7 days at SHV1.",
+  "What did we do last time Hercules battery SoH dropped below 70%?",
+  "Create a work order for the Proteus dock alignment spike at PDX9.",
+];
+
+function loadChat() {
+  document.getElementById('chat-suggested').innerHTML = SUGGESTED.map(s =>
+    `<button onclick="sendChatPrompt('${esc(s).replace(/'/g, "\\'")}')">${esc(s)}</button>`
+  ).join('');
+  const msgs = document.getElementById('chat-messages');
+  if (!msgs.children.length) {
+    msgs.innerHTML = `<div class="chat-msg assistant" style="background:var(--bg-2)">
+      <div style="font-size:13px"><strong>Fleet Health copilot</strong></div>
+      <div style="margin-top:6px;color:var(--text-mut);font-size:13px">
+        I reason over telemetry, service manuals, and fleet memory — and render at the right depth for RME Tech vs RME Lead.
+        Every retrieval is governed by Unity Catalog; every diagnostic persists in Lakebase across model upgrades.
+      </div></div>`;
+  }
+  // Hydrate from server history
+  fetchApi('/api/chat/history').then(h => {
+    (h.messages||[]).forEach(m => {
+      msgs.innerHTML += `<div class="chat-msg ${m.role}">${m.role==='user' ? esc(m.content) : formatMd(m.content)}</div>`;
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  }).catch(()=>{});
+}
+
+function formatAgentName(name) {
+  const short = String(name||'').includes('__') ? name.split('__').pop() : name;
+  const map = {
+    'fleet-telemetry-genie': 'Fleet Telemetry',
+    'fleet_telemetry_genie': 'Fleet Telemetry',
+    'service-manuals-ka': 'Service Manuals (KA)',
+    'service_manuals_ka': 'Service Manuals (KA)',
+    'mcp-lakebase-connection': 'Database (write)',
+    'mcp_lakebase_connection': 'Database (write)',
+    'knowledge_assistant': 'Service Manuals (KA)',
+    'lakebase_mcp': 'Database (write)',
+  };
+  return map[short] || map[name] || String(short||'').replace(/[-_]/g,' ');
+}
+
+function sendChatPrompt(t) { document.getElementById('chat-input').value = t; sendChat(); }
+function askAI(t) { navigate('chat'); setTimeout(() => sendChatPrompt(t), 150); }
+
+let _chatAbort = null;
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const autoApprove = document.getElementById('auto-approve-mcp').checked;
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
+  const container = document.createElement('div');
+  container.className = 'chat-msg assistant';
+  container.innerHTML = `<div class="chat-steps" id="chat-steps-current"></div><div id="chat-thinking-current"></div><div id="chat-answer-current"></div>`;
+  msgs.appendChild(container);
+  msgs.scrollTop = msgs.scrollHeight;
+  const stepsEl = container.querySelector('#chat-steps-current');
+  const thinkingEl = container.querySelector('#chat-thinking-current');
+  const answerEl = container.querySelector('#chat-answer-current');
+  let answerText = '';
+  let thinkingParts = [];
+  let lastAgentStep = null;
+
+  _chatAbort = new AbortController();
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, auto_approve_mcp: autoApprove}),
+      signal: _chatAbort.signal,
+    });
+    if (!resp.ok) throw new Error('HTTP '+resp.status);
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream:true});
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') continue;
+        let evt; try { evt = JSON.parse(raw); } catch { continue; }
+        if (evt.type === 'tool_call') {
+          lastAgentStep = evt.agent;
+          stepsEl.innerHTML += `<div class="chat-step active"><span class="step-icon"></span> Querying ${esc(formatAgentName(evt.agent))}…</div>`;
+        }
+        else if (evt.type === 'agent_switch') { /* noop */ }
+        else if (evt.type === 'sub_result') {
+          const label = lastAgentStep ? formatAgentName(lastAgentStep) : 'sub-agent';
+          stepsEl.innerHTML += `<div class="chat-step data"><span class="step-icon"></span> Received data from ${esc(label)}</div>`;
+          if (evt.text) { thinkingParts.push(evt.text); renderThinking(thinkingEl, thinkingParts); }
+        }
+        else if (evt.type === 'thinking') {
+          thinkingParts.push(evt.text); renderThinking(thinkingEl, thinkingParts);
+        }
+        else if (evt.type === 'delta') {
+          answerText += evt.text; answerEl.innerHTML = formatMd(answerText);
+        }
+        else if (evt.type === 'action_card') {
+          answerEl.insertAdjacentHTML('beforeend', renderActionCard(evt));
+        }
+        else if (evt.type === 'suggested_actions') {
+          const btns = (evt.actions||[]).map(a => `<button onclick="sendChatPrompt('${esc(a.prompt).replace(/'/g,"\\'")}')">${esc(a.label)}</button>`).join('');
+          answerEl.insertAdjacentHTML('beforeend', `<div class="chat-suggested" style="margin-top:10px">${btns}</div>`);
+        }
+        else if (evt.type === 'session_expired') { handleSessionExpired(); return; }
+        else if (evt.type === 'error') {
+          answerEl.innerHTML += `<div style="color:var(--red);margin-top:6px">Error: ${esc(evt.text)}</div>`;
+        }
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+    if (!answerText && thinkingParts.length) {
+      answerEl.innerHTML = formatMd(thinkingParts.join('\n'));
+      thinkingEl.innerHTML = '';
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      answerEl.innerHTML += `<div style="color:var(--red);margin-top:6px">Connection error: ${esc(e.message)}</div>`;
+    }
+  }
+  _chatAbort = null;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function renderThinking(el, parts) {
+  const full = parts.join(' ');
+  el.innerHTML = `<div class="thinking-block" onclick="this.classList.toggle('expanded')">
+    <div class="thinking-toggle">▸ Agent reasoning</div>
+    <div class="thinking-body">${esc(full)}</div>
+  </div>`;
+}
+
+function renderActionCard(evt) {
+  const id = evt.entity_id || 0;
+  const d = evt.details || {};
+  const details = Object.entries(d).filter(([k]) => k !== 'status').map(([k,v]) => `<div><strong>${esc(k)}:</strong> ${esc(v)}</div>`).join('');
+  const btns = (evt.actions||[]).map(a => {
+    const cls = a === 'approve' ? 'approve' : 'dismiss';
+    return `<button class="ac-btn ${cls}" onclick="handleActionCard(this,'${esc(evt.card_type)}',${id},'${esc(a)}')">${esc(a.charAt(0).toUpperCase()+a.slice(1))}</button>`;
+  }).join('');
+  return `<div class="chat-action-card">
+    <div class="ac-header">
+      <span>${esc(evt.title||'')}</span>
+      <span class="badge badge-${esc(d.status||'pending_approval')}">${esc(d.status||'')}</span>
+    </div>
+    <div class="ac-details">${details}</div>
+    <div class="ac-buttons">${btns}</div>
+  </div>`;
+}
+
+async function handleActionCard(btn, cardType, id, action) {
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    if (cardType === 'work_order') {
+      await patchApi('/api/work-orders/'+id, {status: action === 'approve' ? 'in_progress' : 'cancelled'});
+    }
+    showFlash(`${action}d ${cardType}`);
+    btn.textContent = action + 'd';
+  } catch (e) {
+    btn.textContent = 'failed'; btn.disabled = false;
+    showFlash('Failed: '+e.message, true);
+  }
+}
+
+async function clearChat() {
+  document.getElementById('chat-messages').innerHTML = '';
+  try { await fetch('/api/chat/clear', {method:'POST'}); } catch(_) {}
+  loadChat();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORKFLOWS
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadWorkflowsPage() {
+  showSkeleton('wf-list', 5);
+  const data = await fetchApi('/api/agent-overview').catch(() => ({kpis:{}, workflows:[]}));
+  const k = data.kpis || {};
+  document.getElementById('wf-kpi-pending').textContent = fmtN(k.pending_approval);
+  document.getElementById('wf-kpi-inprog').textContent = fmtN(k.in_progress);
+  document.getElementById('wf-kpi-done').textContent = fmtN(k.completed_7d);
+  document.getElementById('wf-kpi-acts').textContent = fmtN(k.agent_actions_24h);
+  document.getElementById('wf-kpi-exc').textContent = fmtN(k.open_exceptions);
+
+  const wfs = data.workflows || [];
+  const list = document.getElementById('wf-list');
+  if (!wfs.length) { list.innerHTML = '<div style="color:var(--text-mut)">No workflows yet.</div>'; return; }
+  list.innerHTML = wfs.map(w => `
+    <div class="wf-card" onclick='openWorkflow(${w.workflow_id})'>
+      <div class="wf-head">
+        <div class="wf-title">${esc(w.headline || w.workflow_type)}</div>
+        <div>${badge(w.severity)} ${badge(w.status)}</div>
+      </div>
+      <div class="wf-summary">${esc(w.summary||'')}</div>
+      <div class="wf-meta"><span style="color:var(--text-faint)">${timeAgo(w.created_at)}</span></div>
+    </div>`).join('');
+}
+
+async function openWorkflow(id) {
+  const wf = await fetchApi('/api/workflows/'+id).catch(() => null);
+  if (!wf) return;
+  const chain = (() => { try { return typeof wf.reasoning_chain === 'string' ? JSON.parse(wf.reasoning_chain) : (wf.reasoning_chain || []); } catch { return []; } })();
+  const chainHtml = chain.map((c,i) => `<li>${esc(c.agent||c.tool||'step')} — ${esc(c.step||c.label||'')} <span style="color:var(--text-mut)">${esc(c.result||c.output||'')}</span></li>`).join('');
+  const actionable = wf.status === 'pending_approval' || wf.status === 'in_progress';
+  document.getElementById('modal-body').innerHTML = `
+    <h2>${esc(wf.headline || wf.workflow_type)}</h2>
+    <div style="color:var(--text-mut);margin-bottom:14px">${esc(wf.summary||'')}</div>
+    <div class="grid-2" style="margin-bottom:14px">
+      <div>${badge(wf.severity)} ${badge(wf.status)} <span style="color:var(--text-mut);font-size:12px">· ${timeAgo(wf.created_at)}</span></div>
+      <div style="text-align:right;color:var(--text-mut);font-size:12px">Entity: <strong>${esc(wf.entity_id||'—')}</strong></div>
+    </div>
+    <h3>Reasoning chain</h3>
+    <ol style="margin:0 0 14px;padding-left:18px">${chainHtml || '<li style="color:var(--text-mut)">No chain recorded.</li>'}</ol>
+    <div style="display:flex;gap:8px">
+      ${actionable ? `<button class="btn btn-primary" onclick="approveWorkflow(${wf.workflow_id})">Approve</button>` : ''}
+      ${actionable ? `<button class="btn" onclick="dismissWorkflow(${wf.workflow_id})">Dismiss</button>` : ''}
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function approveWorkflow(id) {
+  try {
+    const r = await patchApi('/api/workflows/'+id, {status:'approved'});
+    const acts = (r.actions_taken||[]).join(' · ');
+    showFlash('Approved: ' + (acts || 'workflow'));
+    closeModal(); loadWorkflowsPage();
+  } catch (e) { showFlash('Approve failed: '+e.message, true); }
+}
+async function dismissWorkflow(id) {
+  try {
+    const r = await patchApi('/api/workflows/'+id, {status:'dismissed'});
+    const acts = (r.actions_taken||[]).join(' · ');
+    showFlash('Dismissed: ' + (acts || 'workflow'));
+    closeModal(); loadWorkflowsPage();
+  } catch (e) { showFlash('Dismiss failed: '+e.message, true); }
+}
+function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ARCHITECTURE
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadArchitecture() {
+  const d = await fetchApi('/api/architecture').catch(() => ({nodes:[], edges:[]}));
+  const el = document.getElementById('arch-nodes');
+  if (!d.nodes || !d.nodes.length) { el.innerHTML = '<div style="color:var(--text-mut)">No live nodes — agents are still being discovered. Try after deployment.</div>'; return; }
+  // Group by column
+  const groups = {};
+  d.nodes.forEach(n => {
+    const col = n.position ? (n.position.x < 200 ? 'Data' : n.position.x < 700 ? 'Agents' : n.position.x < 1100 ? 'Orchestration' : 'App') : 'Other';
+    (groups[col] = groups[col] || []).push(n);
+  });
+  el.innerHTML = Object.entries(groups).map(([col, nodes]) => `
+    <div style="margin-bottom:18px">
+      <h3 style="margin:0 0 8px;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em">${esc(col)}</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
+        ${nodes.map(n => `<div style="background:var(--bg-2);border-left:3px solid ${esc(n.color||'#999')};border:1px solid var(--border);border-radius:6px;padding:12px">
+          <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase">${esc(n.type_badge||n.type||'')}</div>
+          <div style="font-weight:600">${esc(n.name)}</div>
+          <div style="color:var(--text-mut);font-size:12px;margin-top:4px">${esc(n.description||'').slice(0,140)}</div>
+          ${(n.display_items||[]).slice(0,4).map(i => `<div style="font-size:12px;color:var(--text-mut);margin-top:3px">• ${esc(i.text||'')}</div>`).join('')}
+        </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  refreshHealth();
+  navigate('dashboard');
+});
+</script>
+</body>
+</html>

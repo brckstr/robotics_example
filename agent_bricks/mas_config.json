@@ -1,0 +1,50 @@
+{
+  "$schema": "Physical AI Fleet Health Console — Multi-Agent Supervisor (MAS) configuration",
+  "$instructions": [
+    "1. Create the Genie Space first (see genie_spaces/config.json) and the Knowledge Assistant over service_manual_chunks.",
+    "2. POST to /api/2.0/multi-agent-supervisors with genie-space + knowledge-assistant ONLY (Gotcha #37: external-mcp-server fails on POST).",
+    "3. PATCH to add the external-mcp-server agent — include the FULL agents array (Gotcha #3).",
+    "4. The endpoint name will be: mas-{first_8_chars_of_tile_id}-endpoint.",
+    "5. Use that 8-char prefix as MAS_TILE_ID in app.yaml; use the FULL UUID for /api/2.0/multi-agent-supervisors/{uuid}."
+  ],
+  "$discovery": [
+    "No list endpoint for MAS. To find the tile_id after creation:",
+    "1. GET /api/2.0/serving-endpoints",
+    "2. Find the one named mas-{8chars}-endpoint",
+    "3. Extract tile_endpoint_metadata.tile_id (full UUID)"
+  ],
+  "name": "fleet-health-supervisor",
+  "description": "Multi-agent supervisor for the Physical AI Fleet Health Console — Amazon Robotics RME copilot.",
+  "instructions": "You are the Fleet Health copilot for Amazon Robotics RME (Reliability and Maintenance Engineering) teams. You reduce operator cognitive load by reasoning over telemetry, service manuals, and historical remediations, then rendering recommendations at the right depth for the requester's role (RME Technician vs RME Lead).\n\nEvery retrieval is governed by Unity Catalog; every diagnostic is persisted in Lakebase so the fleet's institutional memory survives detection-model upgrades (e.g., Sparrow v4 → v5).\n\nWhen answering questions:\n1. Use fleet-telemetry-genie to query real telemetry, anomalies, and robot inventory before answering — never guess.\n2. Use service-manuals-ka to retrieve the exact remediation procedure with manual page citations and part numbers.\n3. Use mcp-lakebase-connection to create work orders, persist diagnostics to agent_memory, and update statuses.\n4. Distinguish persona on every response: RME Tech → step-by-step + parts + manual citation; RME Lead → root cause + SLA risk + redeploy recommendation.\n\nAvailable MCP tool names: insert_record, update_records, execute_sql, read_query, list_tables, describe_table.\nLakebase tables: work_orders, agent_memory, notes, agent_actions, workflows.\n\nKey domain terms:\n- RME: Reliability and Maintenance Engineering — frontline fleet operations team.\n- Sparrow / Hercules / Proteus / Sequoia: robot families (item pick arm / drive unit / AMR / storage gantry).\n- FC site codes: BFI4, PDX9, SHV1, CMH1, PHL7, ABE8.\n- Physical AI: Amazon Robotics' term for the AI-driven robotic fleet.\n- Persistent fleet memory: agent_memory rows survive model upgrades (sparrow-detect-v4 → v5).\n- Cognitive load reduction: same as Project Eluna — render at the depth the operator needs.\n\nAlways close write actions with a one-line audit summary so the operator can verify what changed.",
+  "max_turns": 15,
+  "agents": [
+    {
+      "$comment": "Genie Space agent — natural language SQL over Delta Lake telemetry/anomalies/robots",
+      "agent_type": "genie-space",
+      "genie_space": {
+        "id": "TODO_GENIE_SPACE_ID"
+      },
+      "name": "fleet-telemetry-genie",
+      "description": "Natural-language SQL over robots, telemetry, and anomalies in Unity Catalog. Use for fleet KPIs, anomaly counts, robot-family comparisons, FC-site filters, trend questions, and any analytical query. Returns governed data with UC lineage."
+    },
+    {
+      "$comment": "Knowledge Assistant — RAG over robot service manuals + RME runbooks",
+      "agent_type": "knowledge-assistant",
+      "knowledge_assistant": {
+        "knowledge_assistant_id": "TODO_KA_ID"
+      },
+      "name": "service-manuals-ka",
+      "description": "Governed RAG over service_manual_chunks (robot service manuals + RME procedural runbooks for Sparrow, Hercules, Proteus, Sequoia). Use for step-by-step remediation procedures, part numbers (e.g., AR-SPR-VAC-005), torque specs, and any procedural guidance. Every retrieval cites manual page + UC source URI."
+    },
+    {
+      "$comment": "External MCP Server — Lakebase write access. Add via PATCH after initial POST (Gotcha #34).",
+      "$note": "connection_name is set when the UC HTTP connection is created (see docs/API_PATTERNS.md).",
+      "agent_type": "external-mcp-server",
+      "external_mcp_server": {
+        "connection_name": "TODO_LAKEBASE_MCP_CONN"
+      },
+      "name": "mcp-lakebase-connection",
+      "description": "Write operational data to Lakebase. Use to create work_orders (insert_record into work_orders), persist diagnostics to agent_memory so they survive detection-model upgrades, update anomaly_resolved statuses, and add notes. Available tool names: insert_record, update_records, execute_sql, read_query. Lakebase tables: work_orders, agent_memory, notes, agent_actions, workflows. Always include a model_version field when writing to agent_memory so the institutional-memory story is verifiable."
+    }
+  ]
+}

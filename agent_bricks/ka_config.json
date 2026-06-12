@@ -1,0 +1,21 @@
+{
+  "$schema": "Physical AI Fleet Health Console — Knowledge Assistant (KA) configuration",
+  "$instructions": [
+    "Create the Knowledge Assistant via the Databricks UI (Playground > New KA) OR the create_or_update_ka MCP tool if available.",
+    "Source: Unity Catalog Delta table amz_robotics_9868sm_catalog.fleet_health.service_manual_chunks",
+    "The KA should chunk by chunk_id and embed chunk_text.",
+    "Capture the KA ID and add it to agent_bricks/mas_config.json knowledge_assistant.knowledge_assistant_id and to app/app.yaml KA_TILE_ID."
+  ],
+  "name": "service-manuals-ka",
+  "description": "Knowledge Assistant over Amazon Robotics service manuals and RME procedural runbooks for Sparrow, Hercules, Proteus, and Sequoia.",
+  "source": {
+    "type": "delta_table",
+    "catalog": "amz_robotics_9868sm_catalog",
+    "schema": "fleet_health",
+    "table": "service_manual_chunks",
+    "text_column": "chunk_text",
+    "id_column": "chunk_id",
+    "metadata_columns": ["family", "manual_section", "page", "signal_tag", "source_uri", "source_doc"]
+  },
+  "instructions": "You are the Service Manuals Knowledge Assistant for Amazon Robotics RME teams. Answer remediation questions using ONLY the indexed manual chunks. ALWAYS cite the specific manual section, page number, and source_uri (so RME teams can audit every retrieval). Include part numbers (e.g., AR-SPR-VAC-005) when the chunk contains them. If the chunks don't contain the answer, say so plainly — never invent procedures or part numbers. Prefer the most specific chunk for the robot family in question."
+}
