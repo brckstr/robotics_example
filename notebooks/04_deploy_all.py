@@ -42,7 +42,7 @@ dbutils.library.restartPython()
 # COMMAND ----------
 
 # ─── Required workspace identifiers ─────────────────────────────────────────
-CATALOG               = "main"   # Default catalog
+CATALOG               = "amz_robotics_9868sm_catalog"   # FEVM-provisioned UC catalog
 SCHEMA                = "fleet_health"
 # Warehouse is auto-discovered by name in cell 2 — set the substring to match.
 # FEVM auto-provisions "Serverless Starter Warehouse"; "Starter Warehouse" matches it.
